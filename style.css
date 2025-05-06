@@ -1,0 +1,126 @@
+body {
+    font-family: Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    height: 100vh;
+    margin: 0;
+    background-color: #f0f8ff;
+}
+
+h1 {
+    color: #333;
+}
+
+#game {
+    width: 80%;
+    max-width: 800px;
+    text-align: center;
+}
+
+#controls {
+    margin: 10px;
+}
+
+button {
+    margin: 5px;
+    padding: 10px 15px;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+#tree {
+    margin: 20px 0;
+    display: flex;
+    justify-content: center;
+    position: relative;
+    height: 500px;
+}
+
+.node {
+    background-color: #007acc;
+    color: white;
+    border-radius: 50%;
+    padding: 15px;
+    text-align: center;
+    position: absolute;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.line {
+    position: absolute;
+    width: 2px;
+    background-color: #333;
+}
+
+#next-number {
+    font-size: 24px;
+    font-weight: bold;
+    color: #007acc;
+    margin: 10px 0;
+}
+
+#message {
+    color: green;
+    font-weight: bold;
+    margin-top: 20px;
+}
+
+button:disabled {
+    background-color: grey;
+    cursor: not-allowed;
+}
+.tutorial-section {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px auto;
+            max-width: 800px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .tutorial-section h2 {
+            color: #007acc;
+            margin-bottom: 15px;
+        }
+
+        .example-tree {
+            width: 300px;
+            margin: 20px auto;
+        }
+
+        .key-points {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-left: 4px solid #007acc;
+            margin: 15px 0;
+        }
+
+        .rules {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin: 15px 0;
+        }
+
+        .rule-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+
+        [data-toggle="collapse"] {
+            cursor: pointer;
+            color: #007acc;
+            text-decoration: underline;
+        }
+
+        .collapsed {
+            display: none;
+        }
