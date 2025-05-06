@@ -256,11 +256,29 @@
         .collapsed {
             display: none;
         }
+
+        #top-right-button {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            font-size: 16px;
+            padding: 10px 20px;
+            background-color: #007acc;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            z-index: 1000;
+            /* Ensure it stays on top of other elements */
+        }
     </style>
 </head>
 
 <body>
-    <h1>Binary Search Tree Creation Game</h1>
+    <div>
+        <h1>Binary Search Tree Creation Game</h1>
+        <button id="top-right-button" onclick="logout()">Logout</button>
+    </div>
     <div class="tutorial-section">
         <h2>What is a Binary Search Tree?</h2>
         <p>A Binary Search Tree (BST) is a special type of data structure where each node can have up to two children,
@@ -346,6 +364,7 @@
         let currentNumber = null;
         let positions = [];
         let gameFinished = false;
+        const MAX_GAMES = 4;
 
         function startGame() {
             numberQueue = Array.from({ length: 6 }, () => Math.floor(Math.random() * 100));
@@ -363,8 +382,14 @@
             const buttons = document.querySelectorAll("#controls button");
             buttons.forEach(button => button.disabled = false);
 
+            // *** ADDED: Reset progress bar visually to 0% ***
+            const progressBar = document.getElementById("progress-bar");
+            if (progressBar) {
+                progressBar.style.width = "0%";
+            }
+
             displayTree();
-            getNextNumber();
+            getNextNumber(); // This will call updateProgress for the first number
         }
 
         function getNextNumber() {
@@ -375,6 +400,7 @@
                 currentNumber = null;
                 document.getElementById("next-number").textContent = "All numbers placed! Click 'Finish' to check your tree.";
             }
+            updateProgress();
         }
 
         function moveLeft() {
@@ -445,10 +471,13 @@
             if (violations.length === 0) {
                 messageElement.textContent = "Congratulations! You built the BST correctly!";
                 messageElement.className = "";
+
+                // Mark game as completed when successfully finished
+                markGameCompleted();
             } else {
                 // Create error message with violations
                 let errorHTML = `<div class="error">The following nodes are incorrectly placed:</div>
-            <ul class="error-list">`;
+        <ul class="error-list">`;
                 violations.forEach(violation => {
                     errorHTML += `<li>Node ${violation.message}</li>`;
                 });
@@ -579,7 +608,56 @@
             }
         }
 
-        document.addEventListener("DOMContentLoaded", () => startGame());
+        function logout() {
+            localStorage.removeItem("loggedIn");
+            window.location.href = "login.html";
+        }
+
+        // Progress bar logic for current game
+        function updateProgress() {
+            // Original numbers = 1 (root) + 6 (queue) = 7
+            const totalNumbers = 7;
+            // Numbers inserted = total - remaining in queue
+            // We subtract numberQueue.length from totalNumbers to get the count of numbers processed so far.
+            const insertedCount = totalNumbers - numberQueue.length;
+            // Calculate percentage (ensure division by zero doesn't happen if totalNumbers is 0, though it's 7 here)
+            const percent = totalNumbers > 0 ? (insertedCount / totalNumbers) * 100 : 0;
+
+            // *** Ensure this targets the correct progress bar ID ***
+            const progressBar = document.getElementById("progress-bar");
+            if (progressBar) { // Check if the element exists
+                progressBar.style.width = percent + "%";
+            } else {
+                console.error("Progress bar element with ID 'progress-bar' not found!"); // Add error handling
+            }
+        }
+
+        // Progress bar logic for overall game completion
+        function updateOverallProgress() {
+            const completed = parseInt(localStorage.getItem("completedGames") || "0");
+            const percent = Math.min((completed / MAX_GAMES) * 100, 100);
+
+            const progressBar = document.getElementById("progress-bar");
+            progressBar.style.width = percent + "%";
+        }
+
+        function markGameCompleted() {
+            let completed = parseInt(localStorage.getItem("completedGames") || "0");
+            if (completed < MAX_GAMES) {
+                completed += 1;
+                localStorage.setItem("completedGames", completed);
+                updateOverallProgress();
+            }
+        }
+
+        // Initial setup when page loads
+        window.onload = function () {
+            // updateOverallProgress(); // *** REMOVED: Don't show overall progress initially ***
+            startGame(); // Start game, which will reset and update progress for the current game
+        };
+
+        // Remove old event listener to prevent duplication
+        document.removeEventListener("DOMContentLoaded", startGame);
     </script>
 </body>
 
