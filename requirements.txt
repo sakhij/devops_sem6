@@ -1,3 +1,4 @@
 flask
 numpy
 PyPDF2
+scikit-learn
