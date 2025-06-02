@@ -1,11 +1,11 @@
-# Use Nginx (a fast web server)
-FROM nginx:alpine
+FROM python:3.9-slim
 
-# Remove default website
-RUN rm -rf /usr/share/nginx/html/*
+WORKDIR /app
 
-# Copy your frontend code into the image
-COPY . /usr/share/nginx/html
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Expose port 80
-EXPOSE 80
+COPY . .
+
+EXPOSE 5000
+CMD ["python", "app.py"]
