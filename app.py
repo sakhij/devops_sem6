@@ -105,7 +105,7 @@ def index():
 
             if original_text:
                 # Preprocess text, extract features
-                features, score = extract_features(original_text)
+                features, _ = extract_features(original_text)
                 # Predict job role
                 role = classifier.predict(features)[0]
     
