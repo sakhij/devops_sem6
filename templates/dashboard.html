@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}User Dashboard{% endblock %}
+
+{% block content %}
+    <h1>Your Dashboard</h1>
+    {% if current_user.is_authenticated %}
+        <p>Welcome back, User {{ current_user.id }}!</p>
+        <h2>Your Past Analyses (Example Data)</h2>
+        {% if analyses %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Date</th>
+                        <th>Predicted Role</th>
+                        <th>Score</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for analysis in analyses %}
+                        <tr>
+                            <td>{{ analysis.id }}</td>
+                            <td>{{ analysis.date }}</td>
+                            <td>{{ analysis.role }}</td>
+                            <td>{{ analysis.score }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p>No past analyses found. Upload a resume to get started!</p>
+        {% endif %}
+    {% else %}
+        <p>Please log in to view your dashboard.</p>
+    {% endif %}
+{% endblock %}

@@ -1,131 +1,28 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Resume Analyzer</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+{% extends "base.html" %}
 
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+{% block title %}Resume Analyzer - Home{% endblock %}
 
-    <style>
-        body {
-            margin: 0;
-            font-family: 'Inter', sans-serif;
-            background: #f9f9fb;
-            color: #333;
-        }
+{% block content %}
+    <h1>Resume Analyzer</h1>
+    <p style="margin-bottom: 30px;">Upload your resume (.pdf or .txt) to get AI-powered analysis.</p>
 
-        .container {
-            max-width: 700px;
-            margin: 60px auto;
-            background: #fff;
-            padding: 40px;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
-        }
+    <form method="POST" enctype="multipart/form-data">
+        <label for="resume">Choose your resume file:</label>
+        <input type="file" name="resume" id="resume" required>
+        <button type="submit">Analyze Resume</button>
+    </form>
 
-        h1 {
-            font-size: 1.8rem;
-            font-weight: 600;
-            margin-bottom: 10px;
-            color: #222;
-        }
-
-        label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 500;
-        }
-
-        input[type="file"] {
-            border: 1px solid #ccc;
-            padding: 10px;
-            border-radius: 6px;
-            width: 100%;
-        }
-
-        button {
-            background-color: #111827;
-            color: #fff;
-            padding: 12px 20px;
-            border: none;
-            border-radius: 6px;
-            font-size: 1rem;
-            cursor: pointer;
-            margin-top: 20px;
-            width: 100%;
-            transition: 0.2s ease-in-out;
-        }
-
-        button:hover {
-            background-color: #1f2937;
-        }
-
-        .results {
-            margin-top: 30px;
-            padding: 20px;
-            background: #f3f4f6;
-            border-radius: 8px;
-        }
-
-        .results p {
-            margin: 0 0 8px;
-            font-weight: 500;
-        }
-
-        .textarea-container {
-            margin-top: 30px;
-        }
-
-        textarea {
-            width: 100%;
-            height: 300px;
-            border: 1px solid #ddd;
-            padding: 14px;
-            font-family: monospace;
-            border-radius: 8px;
-            resize: vertical;
-            font-size: 0.95rem;
-            background: #fcfcfc;
-        }
-
-        .footer {
-            margin-top: 40px;
-            text-align: center;
-            font-size: 0.85rem;
-            color: #888;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Resume Analyzer</h1>
-        <p style="margin-bottom: 30px;">Upload your resume (.pdf or .txt) to get AI-powered analysis.</p>
-
-        <form method="POST" enctype="multipart/form-data">
-            <label for="resume">Choose your resume file:</label>
-            <input type="file" name="resume" id="resume" required>
-            <button type="submit">Analyze Resume</button>
-        </form>
-
-        {% if resume_score is not none %}
-        <div class="results">
-            <p><strong>Resume Score:</strong> {{ resume_score }} / 100</p>
-            <p><strong>Predicted Role:</strong> {{ predicted_role }}</p>
-        </div>
-        {% endif %}
-
-        {% if original_text %}
-        <div class="textarea-container">
-            <label for="preview">Resume Text Preview:</label>
-            <textarea readonly>{{ original_text }}</textarea>
-        </div>
-        {% endif %}
-
-        <div class="footer">
-            &copy; {{ 2025 }} Resume Analyzer. Crafted with care.
-        </div>
+    {% if resume_score is not none %}
+    <div class="results">
+        <p><strong>Resume Score:</strong> {{ resume_score }} / 100</p>
+        <p><strong>Predicted Role:</strong> {{ predicted_role }}</p>
     </div>
-</body>
-</html>
+    {% endif %}
+
+    {% if original_text %}
+    <div class="textarea-container">
+        <label for="preview">Resume Text Preview:</label>
+        <textarea readonly>{{ original_text }}</textarea>
+    </div>
+    {% endif %}
+{% endblock %}
