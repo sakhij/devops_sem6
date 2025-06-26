@@ -11,6 +11,9 @@ import requests
 from dotenv import load_dotenv
 from urllib.parse import urlencode
 import secrets
+from datetime import datetime
+from pymongo import MongoClient
+from bson.objectid import ObjectId
 
 # Load environment variables from .env file
 load_dotenv()
@@ -24,6 +27,26 @@ GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
 GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET')
 GOOGLE_REDIRECT_URI = 'http://localhost:5000/auth/callback'
 
+# MongoDB Configuration
+MONGODB_URI = os.getenv('MONGODB_URI')
+if not MONGODB_URI:
+    print("WARNING: MONGODB_URI not found. Please set it in your .env file.")
+    print("Example: MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/database_name")
+
+# Initialize MongoDB
+try:
+    client = MongoClient(MONGODB_URI)
+    db = client.resume_analyzer  # Database name
+    users_collection = db.users
+    analyses_collection = db.analyses
+    # Test the connection
+    client.admin.command('ping')
+    print("Successfully connected to MongoDB!")
+except Exception as e:
+    print(f"Error connecting to MongoDB: {e}")
+    client = None
+    db = None
+
 # Check if OAuth credentials are configured
 if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
     print("WARNING: Google OAuth credentials not found. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables.")
@@ -34,28 +57,30 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
-# User storage (in production, use a proper database)
-users = {}
-
 class User(UserMixin):
-    def __init__(self, google_id, email, name, picture=None):
+    def __init__(self, google_id, email, name, picture=None, _id=None):
         self.id = google_id
         self.email = email
         self.name = name
         self.picture = picture
+        self._id = _id
 
     def get_id(self):
         return str(self.id)
 
 @login_manager.user_loader
 def load_user(user_id):
-    user_data = users.get(user_id)
+    if db is None:
+        return None
+    
+    user_data = users_collection.find_one({"google_id": user_id})
     if user_data:
         return User(
             google_id=user_data['google_id'],
             email=user_data['email'],
             name=user_data['name'],
-            picture=user_data.get('picture')
+            picture=user_data.get('picture'),
+            _id=user_data['_id']
         )
     return None
 
@@ -137,12 +162,57 @@ def extract_text_from_pdf(file_stream):
         text += page.extract_text() or ''
     return text
 
+# Save analysis to MongoDB
+def save_analysis(user_id, predicted_role, score, resume_text=None):
+    if db is None:
+        return None
+    
+    analysis_data = {
+        "user_id": user_id,
+        "predicted_role": predicted_role,
+        "score": score,
+        "date": datetime.now(),
+        "resume_text": resume_text[:1000] if resume_text else None  # Store first 1000 chars for privacy
+    }
+    
+    try:
+        result = analyses_collection.insert_one(analysis_data)
+        return result.inserted_id
+    except Exception as e:
+        print(f"Error saving analysis: {e}")
+        return None
+
+# Get user's past analyses from MongoDB
+def get_user_analyses(user_id):
+    if db is None:
+        return []
+    
+    try:
+        analyses = list(analyses_collection.find(
+            {"user_id": user_id}
+        ).sort("date", -1).limit(10))  # Get latest 10 analyses
+        
+        # Convert ObjectId and datetime to strings for template
+        for analysis in analyses:
+            analysis['_id'] = str(analysis['_id'])
+            analysis['date'] = analysis['date'].strftime('%Y-%m-%d')
+        
+        return analyses
+    except Exception as e:
+        print(f"Error fetching analyses: {e}")
+        return []
+
 # Google OAuth Routes
 @app.route('/login')
 def login():
     if current_user.is_authenticated:
         return redirect(url_for('index'))
     
+    # Show the login page
+    return render_template('login.html')
+
+@app.route('/auth/google')
+def auth_google():
     # Generate state parameter for security
     state = secrets.token_urlsafe(32)
     session['oauth_state'] = state
@@ -197,13 +267,23 @@ def auth_callback():
         name = user_info['name']
         picture = user_info.get('picture')
         
-        # Store user data (in production, save to database)
-        users[google_id] = {
-            'google_id': google_id,
-            'email': email,
-            'name': name,
-            'picture': picture
-        }
+        # Save/update user in MongoDB
+        if db is not None:
+            user_data = {
+                'google_id': google_id,
+                'email': email,
+                'name': name,
+                'picture': picture,
+                'last_login': datetime.now(),
+                'updated_at': datetime.now()
+            }
+            
+            # Upsert user (update if exists, insert if not)
+            users_collection.update_one(
+                {'google_id': google_id},
+                {'$set': user_data, '$setOnInsert': {'created_at': datetime.now()}},
+                upsert=True
+            )
         
         # Create user object and login
         user = User(google_id=google_id, email=email, name=name, picture=picture)
@@ -261,6 +341,10 @@ def index():
                 role = classifier.predict(features)[0]
                 resume_score = calculate_resume_quality(original_text)
                 predicted_role = role
+                
+                # Save analysis to MongoDB
+                save_analysis(current_user.id, predicted_role, resume_score, original_text)
+                
         else:
             flash("No file uploaded. Please select a resume file.", 'warning')
 
@@ -278,11 +362,8 @@ def about():
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    # In a real app, you would fetch user-specific data from a database
-    user_analyses = [
-        {"id": 1, "date": "2024-01-15", "role": "Data Scientist", "score": 85},
-        {"id": 2, "date": "2024-02-20", "role": "Machine Learning Engineer", "score": 78}
-    ]
+    # Get user's past analyses from MongoDB
+    user_analyses = get_user_analyses(current_user.id)
     return render_template('dashboard.html', analyses=user_analyses)
 
 if __name__ == '__main__':
