@@ -24,22 +24,32 @@ GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
 GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET')
 GOOGLE_REDIRECT_URI = 'http://localhost:5000/auth/callback'
 
-MONGODB_URI = os.getenv("MONGODB_URI") or os.getenv("MONGO_URL") or os.getenv("MONGO_PUBLIC_URL")
-if not MONGODB_URI:
-    print("\n❌ MongoDB URI not found. Please set MONGODB_URI, MONGO_URL, or MONGO_PUBLIC_URL in your environment.")
-    print("Railway users: add the MongoDB plugin and use the provided connection string.\n")
+# MongoDB priority connection logic
+MONGODB_URI = os.getenv("MONGODB_ATLAS_URI")
+db, client = None, None
 
 try:
+    if not MONGODB_URI:
+        raise ValueError("No Atlas URI provided")
+
     client = MongoClient(MONGODB_URI, tls=True)
-    db = client.resume_analyzer
-    users_collection = db.users
-    analyses_collection = db.analyses
     client.admin.command('ping')
-    print("✅ Successfully connected to MongoDB!")
-except Exception as e:
-    print(f"❌ Error connecting to MongoDB: {e}")
-    client = None
-    db = None
+    print("✅ Connected to MongoDB Atlas")
+except Exception as atlas_error:
+    print(f"⚠️ Failed to connect to Atlas: {atlas_error}")
+    MONGODB_URI = os.getenv("MONGO_URL") or os.getenv("MONGO_PUBLIC_URL")
+    try:
+        client = MongoClient(MONGODB_URI, tls=True)
+        client.admin.command('ping')
+        print("✅ Connected to Railway MongoDB Plugin")
+    except Exception as railway_error:
+        print(f"❌ Failed to connect to Railway MongoDB: {railway_error}")
+        client = None
+        db = None
+    else:
+        db = client.resume_analyzer
+else:
+    db = client.resume_analyzer
 
 if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
     print("WARNING: Google OAuth credentials not found.")
