@@ -28,7 +28,7 @@ GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET')
 GOOGLE_REDIRECT_URI = 'http://localhost:5000/auth/callback'
 
 # MongoDB Configuration
-MONGODB_URI = os.getenv('MONGODB_URI')
+MONGODB_URI = os.getenv('MONGODB_URI') or os.getenv('MONGO_URL')
 if not MONGODB_URI:
     print("WARNING: MONGODB_URI not found. Please set it in your .env file.")
     print("Example: MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/database_name")
@@ -115,7 +115,7 @@ def keyword_score(text):
     return sum([1 for word in keywords if word in text])
 
 # Extract Features
-def extract_features(text, max_kw=10, max_len=1000):
+def extract_features(text):
     cleaned = clean_text(text)
     kw_matches = keyword_score(cleaned)
     length = len(cleaned.split())
