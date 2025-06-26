@@ -32,7 +32,7 @@ GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET')
 GOOGLE_REDIRECT_URI = 'http://localhost:5000/auth/callback'
 
 # MongoDB Initialization with Atlas fallback
-MONGODB_URI = os.getenv("MONGODB_ATLAS_URI")
+MONGODB_URI = os.getenv("MONGODB_URI")
 db = client = None
 try:
     if not MONGODB_URI:
