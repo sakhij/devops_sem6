@@ -28,7 +28,7 @@ GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET')
 GOOGLE_REDIRECT_URI = 'http://localhost:5000/auth/callback'
 
 # MongoDB Configuration
-MONGODB_URI = os.getenv('MONGO_URI')
+MONGODB_URI = os.getenv('MONGODB_URI')
 if not MONGODB_URI:
     print("WARNING: MONGODB_URI not found. Please set it in your .env file.")
     print("Example: MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/database_name")
