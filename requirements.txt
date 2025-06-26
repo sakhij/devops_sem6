@@ -2,7 +2,7 @@ Flask==2.3.3
 Flask-Login==0.6.3
 PyPDF2==3.0.1
 numpy==2.0.2
-scikit-learn==1.4.2
+scikit-learn==1.6.1
 python-dotenv==1.0.0
 requests==2.31.0
 pymongo==4.5.0
