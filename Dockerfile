@@ -6,6 +6,8 @@ WORKDIR /app
 # Copy requirements file first
 COPY requirements.txt .
 
+RUN apt-get update && apt-get install -y libssl-dev
+
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 

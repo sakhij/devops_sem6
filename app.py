@@ -35,7 +35,7 @@ if not MONGODB_URI:
 
 # Initialize MongoDB
 try:
-    client = MongoClient(MONGODB_URI)
+    client = MongoClient(MONGODB_URI, tls=True)
     db = client.resume_analyzer  # Database name
     users_collection = db.users
     analyses_collection = db.analyses
