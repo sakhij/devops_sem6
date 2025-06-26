@@ -1,43 +1,62 @@
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, session
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
-from werkzeug.security import generate_password_hash, check_password_hash
 import os
 import re
 import pickle
 import numpy as np
 import PyPDF2
 from io import BytesIO
+import json
+import requests
+from dotenv import load_dotenv
+from urllib.parse import urlencode
+import secrets
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Initialize Flask app
 app = Flask(__name__, template_folder='templates', static_folder='static')
-app.config['SECRET_KEY'] = 'your_super_secret_key_replace_with_a_strong_one' # IMPORTANT: Change this!
+app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'fallback-secret-key-change-in-production')
+
+# Google OAuth Configuration
+GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
+GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET')
+GOOGLE_REDIRECT_URI = 'http://localhost:5000/auth/callback'
+
+# Check if OAuth credentials are configured
+if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+    print("WARNING: Google OAuth credentials not found. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables.")
+    print("Create a .env file with your Google OAuth credentials for the app to work properly.")
 
 # Initialize Flask-Login
 login_manager = LoginManager()
 login_manager.init_app(app)
-login_manager.login_view = 'login' # Redirects unauthenticated users to the login page
+login_manager.login_view = 'login'
 
-# Dummy User Management (for demonstration purposes only - USE A DATABASE IN PRODUCTION)
-users = {
-    "testuser": {
-        "password_hash": generate_password_hash("123"), # Hash the password
-        "id": "1"
-    }
-}
+# User storage (in production, use a proper database)
+users = {}
 
 class User(UserMixin):
-    def __init__(self, id):
-        self.id = id
+    def __init__(self, google_id, email, name, picture=None):
+        self.id = google_id
+        self.email = email
+        self.name = name
+        self.picture = picture
 
     def get_id(self):
         return str(self.id)
 
 @login_manager.user_loader
 def load_user(user_id):
-    # This function reloads the user object from the user ID stored in the session
-    for username, user_data in users.items():
-        if user_data['id'] == user_id:
-            return User(user_id)
+    user_data = users.get(user_id)
+    if user_data:
+        return User(
+            google_id=user_data['google_id'],
+            email=user_data['email'],
+            name=user_data['name'],
+            picture=user_data.get('picture')
+        )
     return None
 
 # Load Models
@@ -52,7 +71,7 @@ try:
         classifier = pickle.load(f)
 except FileNotFoundError:
     print("Error: Model files not found. Make sure 'models/' directory and its contents exist.")
-    exit() # Exit if models are not available
+    exit()
 
 # Define Keywords for Score Calculation
 keywords = [
@@ -62,8 +81,8 @@ keywords = [
 
 # Preprocess Text
 def clean_text(text):
-    text = re.sub(r'[^a-zA-Z ]', ' ', text)  # Remove special chars
-    text = re.sub(r'\s+', ' ', text)  # Remove extra spaces
+    text = re.sub(r'[^a-zA-Z ]', ' ', text)
+    text = re.sub(r'\s+', ' ', text)
     return text.lower()
 
 # Keyword Matching
@@ -77,9 +96,6 @@ def extract_features(text, max_kw=10, max_len=1000):
     length = len(cleaned.split())
     has_education = int("bachelor" in cleaned or "master" in cleaned or "phd" in cleaned)
 
-    # Note: The original extract_features also returned a 'score' which isn't used
-    # directly by the model. The resume_score is calculated separately.
-    # We'll just return the processed features needed for prediction.
     tfidf = vectorizer.transform([cleaned]).toarray()
     extra_features = np.array([[kw_matches, length, has_education]])
     full_features = np.hstack([tfidf, extra_features])
@@ -101,7 +117,7 @@ def calculate_resume_quality(resume_text):
     else:
         length_score = max(0, 1 - (resume_length - 700) / 300)
 
-    # Keyword Match Score (using defined keywords)
+    # Keyword Match Score
     cleaned_text = clean_text(resume_text)
     matched_keywords_count = sum([1 for word in keywords if word in cleaned_text])
     keyword_match_score = (matched_keywords_count / len(keywords)) if len(keywords) > 0 else 0
@@ -109,7 +125,7 @@ def calculate_resume_quality(resume_text):
     # Vocabulary Diversity
     vocabulary_diversity = len(set(words)) / len(words) if len(words) > 0 else 0
 
-    # Combine scores into a final quality score (weighted average)
+    # Combine scores into a final quality score
     quality_score = (0.35 * length_score * 100 + 0.35 * keyword_match_score * 100 + 0.3 * vocabulary_diversity * 100)
     return round(quality_score, 2)
 
@@ -121,37 +137,101 @@ def extract_text_from_pdf(file_stream):
         text += page.extract_text() or ''
     return text
 
-# Flask Route to Handle Login
-@app.route('/login', methods=['GET', 'POST'])
+# Google OAuth Routes
+@app.route('/login')
 def login():
     if current_user.is_authenticated:
-        return redirect(url_for('index')) # If already logged in, redirect to home
+        return redirect(url_for('index'))
+    
+    # Generate state parameter for security
+    state = secrets.token_urlsafe(32)
+    session['oauth_state'] = state
+    
+    # Build Google OAuth URL
+    google_auth_url = 'https://accounts.google.com/o/oauth2/auth?' + urlencode({
+        'client_id': GOOGLE_CLIENT_ID,
+        'response_type': 'code',
+        'scope': 'openid email profile',
+        'redirect_uri': GOOGLE_REDIRECT_URI,
+        'state': state,
+    })
+    
+    return redirect(google_auth_url)
 
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        user_data = users.get(username)
+@app.route('/auth/callback')
+def auth_callback():
+    try:
+        # Verify state parameter
+        if request.args.get('state') != session.get('oauth_state'):
+            flash('Invalid state parameter. Please try again.', 'danger')
+            return redirect(url_for('login'))
+        
+        # Get authorization code
+        code = request.args.get('code')
+        if not code:
+            flash('Authorization failed. Please try again.', 'danger')
+            return redirect(url_for('login'))
+        
+        # Exchange code for access token
+        token_data = {
+            'client_id': GOOGLE_CLIENT_ID,
+            'client_secret': GOOGLE_CLIENT_SECRET,
+            'code': code,
+            'grant_type': 'authorization_code',
+            'redirect_uri': GOOGLE_REDIRECT_URI,
+        }
+        
+        token_response = requests.post('https://oauth2.googleapis.com/token', data=token_data)
+        token_response.raise_for_status()
+        token_info = token_response.json()
+        
+        # Get user info using access token
+        headers = {'Authorization': f"Bearer {token_info['access_token']}"}
+        user_response = requests.get('https://www.googleapis.com/oauth2/v1/userinfo', headers=headers)
+        user_response.raise_for_status()
+        user_info = user_response.json()
+        
+        # Extract user data
+        google_id = user_info['id']
+        email = user_info['email']
+        name = user_info['name']
+        picture = user_info.get('picture')
+        
+        # Store user data (in production, save to database)
+        users[google_id] = {
+            'google_id': google_id,
+            'email': email,
+            'name': name,
+            'picture': picture
+        }
+        
+        # Create user object and login
+        user = User(google_id=google_id, email=email, name=name, picture=picture)
+        login_user(user)
+        
+        # Clean up session
+        session.pop('oauth_state', None)
+        
+        flash(f'Welcome, {name}!', 'success')
+        return redirect(url_for('index'))
+        
+    except requests.exceptions.RequestException as e:
+        flash(f'Authentication error: {str(e)}', 'danger')
+        return redirect(url_for('login'))
+    except Exception as e:
+        flash(f'Unexpected error: {str(e)}', 'danger')
+        return redirect(url_for('login'))
 
-        if user_data and check_password_hash(user_data['password_hash'], password):
-            user = User(user_data['id'])
-            login_user(user)
-            flash('Logged in successfully!', 'success')
-            return redirect(url_for('index'))
-        else:
-            flash('Invalid username or password.', 'danger')
-    return render_template('login.html')
-
-# Flask Route to Handle Logout
 @app.route('/logout')
-@login_required # Only allow logged-in users to logout
+@login_required
 def logout():
     logout_user()
     flash('You have been logged out.', 'info')
     return redirect(url_for('login'))
 
-# Flask Route to Handle File Upload and Prediction (main page)
+# Main application routes
 @app.route('/', methods=['GET', 'POST'])
-@login_required # Protect the main page, requiring login
+@login_required
 def index():
     resume_score = None
     predicted_role = None
@@ -176,43 +256,34 @@ def index():
                 original_text = None
 
             if original_text and original_text != "Unsupported file format.":
-                # Preprocess text, extract features
-                features = extract_features(original_text) # No longer returning score from here
-                # Predict job role
+                # Extract features and predict
+                features = extract_features(original_text)
                 role = classifier.predict(features)[0]
-    
-                # Calculate Resume Quality Score
                 resume_score = calculate_resume_quality(original_text)
                 predicted_role = role
-            elif not original_text: # Handle cases where text extraction failed or format was unsupported
-                pass # Flash messages are already handled above
         else:
             flash("No file uploaded. Please select a resume file.", 'warning')
 
     return render_template(
         'index.html',
-        resume_score=(resume_score),
+        resume_score=resume_score,
         predicted_role=predicted_role,
         original_text=original_text
     )
 
-# New Route for About page
 @app.route('/about')
 def about():
     return render_template('about.html')
 
-# New Route for Dashboard page
 @app.route('/dashboard')
-@login_required # Protect the dashboard page
+@login_required
 def dashboard():
-    # In a real app, you would fetch user-specific data from a database here.
-    # For demonstration, let's use a dummy list.
+    # In a real app, you would fetch user-specific data from a database
     user_analyses = [
         {"id": 1, "date": "2024-01-15", "role": "Data Scientist", "score": 85},
         {"id": 2, "date": "2024-02-20", "role": "Machine Learning Engineer", "score": 78}
     ]
     return render_template('dashboard.html', analyses=user_analyses)
 
-
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=5000, debug=True) # Set debug=True for development
+    app.run(host="0.0.0.0", port=5000, debug=True)
