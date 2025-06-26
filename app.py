@@ -15,28 +15,23 @@ from datetime import datetime
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 
-# Load environment variables from .env file
 load_dotenv()
 
-# Initialize Flask app
 app = Flask(__name__, template_folder='templates', static_folder='static')
 app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'fallback-secret-key-change-in-production')
 
-# Google OAuth Configuration
 GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
 GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET')
 GOOGLE_REDIRECT_URI = 'http://localhost:5000/auth/callback'
 
-# MongoDB Configuration
 MONGODB_URI = os.getenv("MONGODB_URI") or os.getenv("MONGO_URL") or os.getenv("MONGO_PUBLIC_URL")
 if not MONGODB_URI:
     print("\n❌ MongoDB URI not found. Please set MONGODB_URI, MONGO_URL, or MONGO_PUBLIC_URL in your environment.")
     print("Railway users: add the MongoDB plugin and use the provided connection string.\n")
 
-# Initialize MongoDB
 try:
     client = MongoClient(MONGODB_URI, tls=True)
-    db = client.resume_analyzer  # Database name
+    db = client.resume_analyzer
     users_collection = db.users
     analyses_collection = db.analyses
     client.admin.command('ping')
@@ -46,11 +41,9 @@ except Exception as e:
     client = None
     db = None
 
-# Check if OAuth credentials are configured
 if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
-    print("WARNING: Google OAuth credentials not found. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables.")
+    print("WARNING: Google OAuth credentials not found.")
 
-# Initialize Flask-Login
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
@@ -81,7 +74,7 @@ def load_user(user_id):
         )
     return None
 
-# Load Models
+# Load ML models
 try:
     with open('models/vectorizer.pkl', 'rb') as f:
         vectorizer = pickle.load(f)
@@ -92,7 +85,7 @@ try:
     with open('models/classifier.pkl', 'rb') as f:
         classifier = pickle.load(f)
 except FileNotFoundError:
-    print("Error: Model files not found. Make sure 'models/' directory and its contents exist.")
+    print("Error: Model files not found.")
     exit()
 
 keywords = [
@@ -142,6 +135,23 @@ def extract_text_from_pdf(file_stream):
     for page in reader.pages:
         text += page.extract_text() or ''
     return text
+
+def extract_uploaded_resume_text(uploaded_file):
+    if not uploaded_file:
+        flash("No file uploaded. Please select a resume file.", 'warning')
+        return None
+
+    filename = uploaded_file.filename.lower()
+    try:
+        if filename.endswith('.txt'):
+            return uploaded_file.read().decode('utf-8', errors='ignore')
+        elif filename.endswith('.pdf'):
+            return extract_text_from_pdf(BytesIO(uploaded_file.read()))
+        else:
+            flash("Unsupported file format. Please upload a .pdf or .txt file.", 'warning')
+    except Exception as e:
+        flash(f"Error processing file: {e}", 'danger')
+    return None
 
 def save_analysis(user_id, predicted_role, score, resume_text=None):
     if db is None:
@@ -256,32 +266,16 @@ def logout():
 @app.route('/', methods=['GET', 'POST'])
 @login_required
 def index():
-    resume_score = None
-    predicted_role = None
-    original_text = None
+    resume_score, predicted_role, original_text = None, None, None
+
     if request.method == 'POST':
-        uploaded_file = request.files['resume']
-        if uploaded_file:
-            filename = uploaded_file.filename
-            if filename.endswith('.txt'):
-                original_text = uploaded_file.read().decode('utf-8', errors='ignore')
-            elif filename.endswith('.pdf'):
-                try:
-                    original_text = extract_text_from_pdf(BytesIO(uploaded_file.read()))
-                except Exception as e:
-                    flash(f"Error processing PDF: {e}. Please ensure it's a valid PDF.", 'danger')
-                    original_text = None
-            else:
-                flash("Unsupported file format. Please upload a .pdf or .txt file.", 'warning')
-                original_text = None
-            if original_text and original_text != "Unsupported file format.":
-                features = extract_features(original_text)
-                role = classifier.predict(features)[0]
-                resume_score = calculate_resume_quality(original_text)
-                predicted_role = role
-                save_analysis(current_user.id, predicted_role, resume_score, original_text)
-        else:
-            flash("No file uploaded. Please select a resume file.", 'warning')
+        original_text = extract_uploaded_resume_text(request.files.get('resume'))
+        if original_text:
+            features = extract_features(original_text)
+            predicted_role = classifier.predict(features)[0]
+            resume_score = calculate_resume_quality(original_text)
+            save_analysis(current_user.id, predicted_role, resume_score, original_text)
+
     return render_template('index.html', resume_score=resume_score, predicted_role=predicted_role, original_text=original_text)
 
 @app.route('/about')
