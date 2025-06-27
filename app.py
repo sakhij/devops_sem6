@@ -2,7 +2,7 @@ import os
 import re
 import pickle
 import secrets
-from datetime import datetime
+from datetime import datetime, timezone
 from io import BytesIO
 from urllib.parse import urlencode
 
@@ -90,7 +90,7 @@ def get_user_profile(user_id):
                 "email_notifications": True,
                 "marketing_emails": False,
                 "timezone": "UTC",
-                "created_at": datetime.now()
+                "created_at": datetime.utcnow()
             }
             DB.user_profiles.insert_one(default_profile)
             return default_profile
@@ -105,7 +105,7 @@ def update_user_profile(user_id, profile_data):
         return False
     
     try:
-        profile_data["updated_at"] = datetime.now()
+        profile_data["updated_at"] = datetime.utcnow()
         result = DB.user_profiles.update_one(
             {"user_id": user_id},
             {"$set": profile_data},
@@ -137,19 +137,29 @@ def get_user_statistics(user_id):
             total_score = sum(analysis.get('score', 0) for analysis in analyses)
             avg_score = round(total_score / analysis_count, 1)
         
-        # Calculate days since joining
-        created_at = user.get('created_at', datetime.now())
-        days_since_join = (datetime.now() - created_at).days
+        # Get current UTC time
+        now_utc = datetime.utcnow()
         
-        # Calculate days since last analysis
+        # Calculate days since joining
+        created_at = user.get('created_at', now_utc)
+        # Ensure created_at is timezone-naive
+        if hasattr(created_at, 'tzinfo') and created_at.tzinfo:
+            created_at = created_at.replace(tzinfo=None)
+        days_since_join = max(0, (now_utc - created_at).days)
+        
+        # Calculate days since last analysis - FIXED VERSION
         last_analysis_days = 0
         if analyses:
             last_analysis = max(analyses, key=lambda x: x.get('date', datetime.min))
-            last_analysis_date = last_analysis.get('date', datetime.now())
-            print(last_analysis_date)
-            last_analysis_days = (datetime.now()-last_analysis_date).days
-            print('a',last_analysis_days)
-            print('b', datetime.now())
+            last_analysis_date = last_analysis.get('date', now_utc)
+            
+            # Ensure last_analysis_date is timezone-naive
+            if hasattr(last_analysis_date, 'tzinfo') and last_analysis_date.tzinfo:
+                last_analysis_date = last_analysis_date.replace(tzinfo=None)
+            
+            # Calculate difference and ensure it's not negative
+            time_diff = now_utc - last_analysis_date
+            last_analysis_days = max(0, time_diff.days)
         
         return {
             'analysis_count': analysis_count,
@@ -157,7 +167,7 @@ def get_user_statistics(user_id):
             'days_since_join': days_since_join,
             'last_analysis_days': last_analysis_days,
             'account_created': created_at.strftime('%B %d, %Y'),
-            'last_login': user.get('last_login', datetime.now()).strftime('%B %d, %Y at %I:%M %p')
+            'last_login': user.get('last_login', now_utc).strftime('%B %d, %Y at %I:%M %p')
         }
     except Exception as e:
         print(f"Error fetching user statistics: {e}")
@@ -283,7 +293,7 @@ def save_analysis(user_id, predicted_role, score, resume_text=None):
             "user_id": user_id,
             "predicted_role": predicted_role,
             "score": score,
-            "date": datetime.now(),
+            "date": datetime.utcnow(),  # Use UTC consistently
             "resume_text": resume_text[:1000] if resume_text else None
         }
         result = DB.analyses.insert_one(analysis_data)
@@ -354,13 +364,13 @@ def auth_callback():
             'email': user_info['email'],
             'name': user_info['name'],
             'picture': user_info.get('picture'),
-            'last_login': datetime.now(),
-            'updated_at': datetime.now()
+            'last_login': datetime.utcnow(),  # Use UTC consistently
+            'updated_at': datetime.utcnow()
         }
         if DB is not None:
             DB.users.update_one(
                 {'google_id': user_info['id']},
-                {'$set': user_data, '$setOnInsert': {'created_at': datetime.now()}},
+                {'$set': user_data, '$setOnInsert': {'created_at': datetime.utcnow()}},
                 upsert=True
             )
 
