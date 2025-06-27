@@ -1,16 +1,19 @@
-FROM python:3.9-slim
+# Use Python image
+FROM python:3.10-slim
 
-# Set workdir using Linux-style path
+# Set working directory
 WORKDIR /app
 
-# Copy requirements file first
+# Install dependencies
 COPY requirements.txt .
-
-# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Then copy the rest of the source code
+# Copy everything else
 COPY . .
 
-# Default command
+# Set environment variables
+ENV FLASK_ENV=production
+ENV PYTHONUNBUFFERED=1
+
+# Run the app
 CMD ["python", "app.py"]

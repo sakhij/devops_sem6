@@ -23,7 +23,8 @@ app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'fallback-secret-key-ch
 
 GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
 GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET')
-GOOGLE_REDIRECT_URI = 'http://localhost:5000/auth/callback'
+GOOGLE_REDIRECT_URI =  os.getenv('GOOGLE_REDIRECT_URI', 'http://localhost:5000/auth/callback')
+
 
 MONGODB_URI = os.getenv("MONGODB_URI")
 DB_CLIENT, DB = None, None
@@ -35,17 +36,17 @@ try:
     DB_CLIENT = MongoClient(MONGODB_URI, tls=True)
     DB_CLIENT.admin.command('ping')
     DB = DB_CLIENT.resume_analyzer
-    print("✅ Connected to MongoDB Atlas")
+    print("Connected to MongoDB Atlas")
 except Exception as atlas_error:
-    print(f"⚠️ Failed to connect to Atlas: {atlas_error}")
+    print(f" Failed to connect to Atlas: {atlas_error}")
     MONGODB_URI = os.getenv("MONGO_URL") or os.getenv("MONGO_PUBLIC_URL")
     try:
         DB_CLIENT = MongoClient(MONGODB_URI, tls=True)
         DB_CLIENT.admin.command('ping')
         DB = DB_CLIENT.resume_analyzer
-        print("✅ Connected to Railway MongoDB Plugin")
+        print("Connected to Railway MongoDB Plugin")
     except Exception as railway_error:
-        print(f"❌ Failed to connect to Railway MongoDB: {railway_error}")
+        print(f"Failed to connect to Railway MongoDB: {railway_error}")
         DB_CLIENT = None
         DB = None
 
