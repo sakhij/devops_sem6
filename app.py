@@ -5,6 +5,7 @@ import secrets
 from datetime import datetime, timezone
 from io import BytesIO
 from urllib.parse import urlencode
+import pytz
 
 import numpy as np
 import PyPDF2
@@ -127,6 +128,10 @@ def get_user_statistics(user_id):
         if not user:
             return {}
         
+        # Get user's timezone preference
+        user_profile = DB.user_profiles.find_one({"user_id": user_id})
+        user_timezone = user_profile.get('timezone', 'UTC') if user_profile else 'UTC'
+        
         # Get analysis count and average score
         analyses = list(DB.analyses.find({"user_id": user_id}))
         analysis_count = len(analyses)
@@ -161,13 +166,20 @@ def get_user_statistics(user_id):
             time_diff = now_utc - last_analysis_date
             last_analysis_days = max(0, time_diff.days)
         
+        # Convert dates to user's timezone for display
+        created_at_user_tz = convert_utc_to_timezone(created_at, user_timezone)
+        last_login_utc = user.get('last_login', now_utc)
+        if hasattr(last_login_utc, 'tzinfo') and last_login_utc.tzinfo:
+            last_login_utc = last_login_utc.replace(tzinfo=None)
+        last_login_user_tz = convert_utc_to_timezone(last_login_utc, user_timezone)
+        
         return {
             'analysis_count': analysis_count,
             'avg_score': avg_score,
             'days_since_join': days_since_join,
             'last_analysis_days': last_analysis_days,
-            'account_created': created_at.strftime('%B %d, %Y'),
-            'last_login': user.get('last_login', now_utc).strftime('%B %d, %Y at %I:%M %p')
+            'account_created': created_at_user_tz.strftime('%B %d, %Y'),
+            'last_login': last_login_user_tz.strftime('%B %d, %Y at %I:%M %p')
         }
     except Exception as e:
         print(f"Error fetching user statistics: {e}")
@@ -415,6 +427,40 @@ def about():
 @login_required
 def dashboard():
     return render_template('dashboard.html', analyses=get_user_analyses(current_user.id))
+
+def convert_utc_to_timezone(utc_datetime, target_timezone='UTC'):
+    """
+    Convert a UTC datetime to a specific timezone
+    
+    Args:
+        utc_datetime: datetime object (assumed to be in UTC)
+        target_timezone: string representing the target timezone (e.g., 'US/Eastern', 'Asia/Kolkata')
+    
+    Returns:
+        datetime object in the target timezone
+    """
+    try:
+        # Ensure the datetime is timezone-naive (as your code expects)
+        if hasattr(utc_datetime, 'tzinfo') and utc_datetime.tzinfo:
+            utc_datetime = utc_datetime.replace(tzinfo=None)
+        
+        # Create a timezone-aware UTC datetime
+        utc_aware = utc_datetime.replace(tzinfo=timezone.utc)
+        
+        # Convert to target timezone
+        if target_timezone == 'UTC':
+            return utc_datetime  # Return as-is for UTC
+        
+        target_tz = pytz.timezone(target_timezone)
+        converted = utc_aware.astimezone(target_tz)
+        
+        # Return timezone-naive datetime (since your code expects this)
+        return converted.replace(tzinfo=None)
+        
+    except Exception as e:
+        print(f"Error converting timezone: {e}")
+        # Fallback to original datetime if conversion fails
+        return utc_datetime
 
 @app.route('/profile', methods=['GET', 'POST'])
 @login_required
