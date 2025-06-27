@@ -18,6 +18,7 @@
                 <div class="nav-right">
                     {% if current_user.is_authenticated %}
                         <a href="{{ url_for('dashboard') }}">Dashboard</a>
+                        <a href="{{ url_for('profile') }}">Profile</a>
                         <div class="user-info">
                             {% if current_user.picture %}
                                 <img src="{{ current_user.picture }}" alt="Profile" class="profile-pic">
@@ -190,6 +191,34 @@
 
             .user-name {
                 display: none;
+            }
+
+            .nav-right {
+                gap: 0.5rem;
+            }
+
+            .nav-right a {
+                font-size: 0.9rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .nav-left, .nav-right {
+                gap: 0.5rem;
+            }
+
+            .nav-brand {
+                font-size: 1.1rem;
+            }
+
+            .profile-pic {
+                width: 28px;
+                height: 28px;
+            }
+
+            .login-btn {
+                padding: 0.4rem 0.8rem;
+                font-size: 0.9rem;
             }
         }
     </style>

@@ -1,0 +1,404 @@
+{% extends "base.html" %}
+
+{% block title %}Profile Settings{% endblock %}
+
+{% block content %}
+    <div class="profile-container">
+        <h1>Profile Settings</h1>
+        
+        <div class="profile-sections">
+            <!-- Personal Information Section -->
+            <div class="profile-section">
+                <h2>Personal Information</h2>
+                <form method="POST" action="{{ url_for('profile') }}" class="profile-form">
+                    <input type="hidden" name="form_type" value="personal_info">
+                    
+                    <div class="form-group">
+                        <label for="name">Full Name</label>
+                        <input type="text" id="name" name="name" value="{{ current_user.name }}" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="email">Email</label>
+                        <input type="email" id="email" name="email" value="{{ current_user.email }}" readonly>
+                        <small class="form-text">Email cannot be changed as it's linked to your Google account</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="phone">Phone Number</label>
+                        <input type="tel" id="phone" name="phone" value="{{ user_profile.phone or '' }}">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="location">Location</label>
+                        <input type="text" id="location" name="location" value="{{ user_profile.location or '' }}" placeholder="City, Country">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="profession">Current Profession</label>
+                        <input type="text" id="profession" name="profession" value="{{ user_profile.profession or '' }}" placeholder="e.g., Software Engineer">
+                    </div>
+                    
+                    <button type="submit" class="btn-primary">Update Personal Info</button>
+                </form>
+            </div>
+
+            <!-- Account Preferences Section -->
+            <div class="profile-section">
+                <h2>Account Preferences</h2>
+                <form method="POST" action="{{ url_for('profile') }}" class="profile-form">
+                    <input type="hidden" name="form_type" value="preferences">
+                    
+                    <div class="form-group">
+                        <label for="timezone">Timezone</label>
+                        <select id="timezone" name="timezone">
+                            <option value="UTC" {{ 'selected' if user_profile.timezone == 'UTC' else '' }}>UTC</option>
+                            <option value="America/New_York" {{ 'selected' if user_profile.timezone == 'America/New_York' else '' }}>Eastern Time</option>
+                            <option value="America/Chicago" {{ 'selected' if user_profile.timezone == 'America/Chicago' else '' }}>Central Time</option>
+                            <option value="America/Denver" {{ 'selected' if user_profile.timezone == 'America/Denver' else '' }}>Mountain Time</option>
+                            <option value="America/Los_Angeles" {{ 'selected' if user_profile.timezone == 'America/Los_Angeles' else '' }}>Pacific Time</option>
+                            <option value="Europe/London" {{ 'selected' if user_profile.timezone == 'Europe/London' else '' }}>London</option>
+                            <option value="Asia/Kolkata" {{ 'selected' if user_profile.timezone == 'Asia/Kolkata' else '' }}>India Standard Time</option>
+                        </select>
+                    </div>
+                    
+                    <button type="submit" class="btn-primary">Update Preferences</button>
+                </form>
+            </div>
+
+            <!-- Account Statistics Section -->
+            <div class="profile-section">
+                <h2>Account Statistics</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number">{{ analysis_count }}</div>
+                        <div class="stat-label">Resume Analyses</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">{{ days_since_join }}</div>
+                        <div class="stat-label">Days Since Joining</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">{{ last_analysis_days }}</div>
+                        <div class="stat-label">Days Since Last Analysis</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">{{ avg_score or 'N/A' }}</div>
+                        <div class="stat-label">Average Resume Score</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Privacy & Security Section -->
+            <div class="profile-section">
+                <h2>Privacy & Security</h2>
+                
+                <div class="privacy-info">
+                    <p><strong>Account Created:</strong> {{ account_created }}</p>
+                    <p><strong>Last Login:</strong> {{ last_login }}</p>
+                </div>
+                
+                <div class="danger-zone">
+                    <h3>Danger Zone</h3>
+                    <p>These actions cannot be undone.</p>
+                    
+                    <button type="button" class="btn-danger" onclick="confirmDataDeletion()">
+                        Delete All My Data
+                    </button>
+                    
+                    <button type="button" class="btn-danger" onclick="confirmAccountDeletion()">
+                        Delete Account
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Modals -->
+    <div id="confirmModal" class="modal">
+        <div class="modal-content">
+            <h3 id="modalTitle">Confirm Action</h3>
+            <p id="modalMessage">Are you sure you want to proceed?</p>
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary" onclick="closeModal()">Cancel</button>
+                <button type="button" class="btn-danger" id="confirmBtn">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .profile-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .profile-container h1 {
+            color: #1f2937;
+            font-size: 2rem;
+            font-weight: 600;
+            margin-bottom: 2rem;
+        }
+
+        .profile-sections {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .profile-section {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e5e7eb;
+        }
+
+        .profile-section h2 {
+            color: #374151;
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 0.5rem;
+        }
+
+        .profile-form {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            color: #374151;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+        }
+
+        .form-group input,
+        .form-group select {
+            padding: 0.75rem;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 1rem;
+            transition: border-color 0.2s ease;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #4f46e5;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+
+        .form-group input[readonly] {
+            background-color: #f9fafb;
+            color: #6b7280;
+        }
+
+        .form-text {
+            color: #6b7280;
+            font-size: 0.875rem;
+            margin-top: 0.25rem;
+        }
+
+        .checkbox-label {
+            display: flex !important;
+            flex-direction: row !important;
+            align-items: center;
+            cursor: pointer;
+            margin-bottom: 0 !important;
+        }
+
+        .checkbox-label input[type="checkbox"] {
+            margin-right: 0.75rem;
+            width: auto;
+        }
+
+        .btn-primary {
+            background: #4f46e5;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 6px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+            align-self: flex-start;
+        }
+
+        .btn-primary:hover {
+            background: #4338ca;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .stat-card {
+            background: #f9fafb;
+            padding: 1.5rem;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid #e5e7eb;
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 600;
+            color: #4f46e5;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            color: #6b7280;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .privacy-info {
+            background: #f9fafb;
+            padding: 1rem;
+            border-radius: 6px;
+            margin-bottom: 1.5rem;
+        }
+
+        .privacy-info p {
+            margin: 0.5rem 0;
+            color: #6b7280;
+        }
+
+        .danger-zone {
+            border: 2px solid #fee2e2;
+            border-radius: 8px;
+            padding: 1.5rem;
+            background: #fef2f2;
+        }
+
+        .danger-zone h3 {
+            color: #dc2626;
+            margin-bottom: 0.5rem;
+        }
+
+        .danger-zone p {
+            color: #7f1d1d;
+            margin-bottom: 1rem;
+        }
+
+        .btn-danger {
+            background: #dc2626;
+            color: white;
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 6px;
+            font-weight: 500;
+            cursor: pointer;
+            margin-right: 0.5rem;
+            margin-bottom: 0.5rem;
+            transition: background-color 0.2s ease;
+        }
+
+        .btn-danger:hover {
+            background: #b91c1c;
+        }
+
+        .btn-secondary {
+            background: #6b7280;
+            color: white;
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 6px;
+            font-weight: 500;
+            cursor: pointer;
+            margin-right: 0.5rem;
+            transition: background-color 0.2s ease;
+        }
+
+        .btn-secondary:hover {
+            background: #4b5563;
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 15% auto;
+            padding: 2rem;
+            border-radius: 8px;
+            width: 400px;
+            max-width: 90%;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.5rem;
+            margin-top: 1.5rem;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .profile-container {
+                padding: 15px;
+            }
+
+            .profile-section {
+                padding: 1rem;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+
+    <script>
+        function confirmDataDeletion() {
+            document.getElementById('modalTitle').textContent = 'Delete All Data';
+            document.getElementById('modalMessage').textContent = 'This will permanently delete all your resume analyses and profile data. Your account will remain active but empty.';
+            document.getElementById('confirmBtn').onclick = function() {
+                window.location.href = "{{ url_for('delete_user_data') }}";
+            };
+            document.getElementById('confirmModal').style.display = 'block';
+        }
+
+        function confirmAccountDeletion() {
+            document.getElementById('modalTitle').textContent = 'Delete Account';
+            document.getElementById('modalMessage').textContent = 'This will permanently delete your account and all associated data. This action cannot be undone.';
+            document.getElementById('confirmBtn').onclick = function() {
+                window.location.href = "{{ url_for('delete_account') }}";
+            };
+            document.getElementById('confirmModal').style.display = 'block';
+        }
+
+        function closeModal() {
+            document.getElementById('confirmModal').style.display = 'none';
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('confirmModal');
+            if (event.target == modal) {
+                modal.style.display = 'none';
+            }
+        };
+    </script>
+{% endblock %}

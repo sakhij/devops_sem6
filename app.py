@@ -1,5 +1,3 @@
-"""Flask Resume Analyzer App with Google OAuth and MongoDB"""
-
 import os
 import re
 import pickle
@@ -25,7 +23,6 @@ GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
 GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET')
 GOOGLE_REDIRECT_URI =  os.getenv('GOOGLE_REDIRECT_URI', 'http://localhost:5000/auth/callback')
 
-
 MONGODB_URI = os.getenv("MONGODB_URI")
 DB_CLIENT, DB = None, None
 
@@ -39,16 +36,6 @@ try:
     print("Connected to MongoDB Atlas")
 except Exception as atlas_error:
     print(f" Failed to connect to Atlas: {atlas_error}")
-    MONGODB_URI = os.getenv("MONGO_URL") or os.getenv("MONGO_PUBLIC_URL")
-    try:
-        DB_CLIENT = MongoClient(MONGODB_URI, tls=True)
-        DB_CLIENT.admin.command('ping')
-        DB = DB_CLIENT.resume_analyzer
-        print("Connected to Railway MongoDB Plugin")
-    except Exception as railway_error:
-        print(f"Failed to connect to Railway MongoDB: {railway_error}")
-        DB_CLIENT = None
-        DB = None
 
 if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
     print("WARNING: Google OAuth credentials not found.")
@@ -85,6 +72,125 @@ def load_user(user_id):
         )
     return None
 
+# Profile Management Functions
+def get_user_profile(user_id):
+    """Get extended user profile information"""
+    if DB is None:
+        return {}
+    
+    try:
+        profile = DB.user_profiles.find_one({"user_id": user_id})
+        if not profile:
+            # Create default profile
+            default_profile = {
+                "user_id": user_id,
+                "phone": "",
+                "location": "",
+                "profession": "",
+                "email_notifications": True,
+                "marketing_emails": False,
+                "timezone": "UTC",
+                "created_at": datetime.now()
+            }
+            DB.user_profiles.insert_one(default_profile)
+            return default_profile
+        return profile
+    except Exception as e:
+        print(f"Error fetching user profile: {e}")
+        return {}
+
+def update_user_profile(user_id, profile_data):
+    """Update user profile information"""
+    if DB is None:
+        return False
+    
+    try:
+        profile_data["updated_at"] = datetime.now()
+        result = DB.user_profiles.update_one(
+            {"user_id": user_id},
+            {"$set": profile_data},
+            upsert=True
+        )
+        return result.modified_count > 0 or result.upserted_id is not None
+    except Exception as e:
+        print(f"Error updating user profile: {e}")
+        return False
+
+def get_user_statistics(user_id):
+    """Get user account statistics"""
+    if DB is None:
+        return {}
+    
+    try:
+        # Get user creation date
+        user = DB.users.find_one({"google_id": user_id})
+        if not user:
+            return {}
+        
+        # Get analysis count and average score
+        analyses = list(DB.analyses.find({"user_id": user_id}))
+        analysis_count = len(analyses)
+        
+        # Calculate average score
+        avg_score = None
+        if analyses:
+            total_score = sum(analysis.get('score', 0) for analysis in analyses)
+            avg_score = round(total_score / analysis_count, 1)
+        
+        # Calculate days since joining
+        created_at = user.get('created_at', datetime.now())
+        days_since_join = (datetime.now() - created_at).days
+        
+        # Calculate days since last analysis
+        last_analysis_days = 0
+        if analyses:
+            last_analysis = max(analyses, key=lambda x: x.get('date', datetime.min))
+            last_analysis_date = last_analysis.get('date', datetime.now())
+            last_analysis_days = (datetime.now() - last_analysis_date).days
+        
+        return {
+            'analysis_count': analysis_count,
+            'avg_score': avg_score,
+            'days_since_join': days_since_join,
+            'last_analysis_days': last_analysis_days,
+            'account_created': created_at.strftime('%B %d, %Y'),
+            'last_login': user.get('last_login', datetime.now()).strftime('%B %d, %Y at %I:%M %p')
+        }
+    except Exception as e:
+        print(f"Error fetching user statistics: {e}")
+        return {}
+
+def delete_user_data(user_id):
+    """Delete all user data but keep account"""
+    if DB is None:
+        return False
+    
+    try:
+        # Delete analyses
+        DB.analyses.delete_many({"user_id": user_id})
+        # Delete profile
+        DB.user_profiles.delete_one({"user_id": user_id})
+        return True
+    except Exception as e:
+        print(f"Error deleting user data: {e}")
+        return False
+
+def delete_user_account(user_id):
+    """Delete user account and all associated data"""
+    if DB is None:
+        return False
+    
+    try:
+        # Delete all user data
+        DB.analyses.delete_many({"user_id": user_id})
+        DB.user_profiles.delete_one({"user_id": user_id})
+        DB.users.delete_one({"google_id": user_id})
+        return True
+    except Exception as e:
+        print(f"Error deleting user account: {e}")
+        return False
+
+# Load ML models
 try:
     with open('models/vectorizer.pkl', 'rb') as f:
         vectorizer = pickle.load(f)
@@ -197,6 +303,7 @@ def get_user_analyses(user_id):
         print(f"Error fetching analyses: {e}")
         return []
 
+# Routes
 @app.route('/login')
 def login():
     if current_user.is_authenticated:
@@ -295,6 +402,77 @@ def about():
 @login_required
 def dashboard():
     return render_template('dashboard.html', analyses=get_user_analyses(current_user.id))
+
+@app.route('/profile', methods=['GET', 'POST'])
+@login_required
+def profile():
+    if request.method == 'POST':
+        form_type = request.form.get('form_type')
+        
+        if form_type == 'personal_info':
+            # Update personal information
+            profile_data = {
+                'phone': request.form.get('phone', ''),
+                'location': request.form.get('location', ''),
+                'profession': request.form.get('profession', '')
+            }
+            
+            # Also update user name in main users collection
+            if request.form.get('name') != current_user.name:
+                if DB is not None:
+                    DB.users.update_one(
+                        {"google_id": current_user.id},
+                        {"$set": {"name": request.form.get('name')}}
+                    )
+            
+            if update_user_profile(current_user.id, profile_data):
+                flash('Personal information updated successfully!', 'success')
+            else:
+                flash('Error updating personal information.', 'danger')
+        
+        elif form_type == 'preferences':
+            # Update preferences
+            profile_data = {
+                'email_notifications': 'email_notifications' in request.form,
+                'marketing_emails': 'marketing_emails' in request.form,
+                'timezone': request.form.get('timezone', 'UTC')
+            }
+            
+            if update_user_profile(current_user.id, profile_data):
+                flash('Preferences updated successfully!', 'success')
+            else:
+                flash('Error updating preferences.', 'danger')
+        
+        return redirect(url_for('profile'))
+    
+    # GET request - display profile
+    user_profile = get_user_profile(current_user.id)
+    user_stats = get_user_statistics(current_user.id)
+    
+    return render_template('profile.html', 
+                         user_profile=user_profile,
+                         **user_stats)
+
+@app.route('/delete_user_data', endpoint='delete_user_data')
+@login_required
+def delete_user_data_route():
+    if delete_user_data(current_user.id):
+        flash('All your data has been deleted successfully.', 'success')
+    else:
+        flash('Error deleting your data. Please try again.', 'danger')
+    return redirect(url_for('profile'))
+
+@app.route('/delete_account')
+@login_required
+def delete_account():
+    user_name = current_user.name
+    if delete_user_account(current_user.id):
+        logout_user()
+        flash(f'Account for {user_name} has been deleted successfully.', 'info')
+        return redirect(url_for('login'))
+    else:
+        flash('Error deleting account. Please try again.', 'danger')
+        return redirect(url_for('profile'))
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=5000, debug=True)
