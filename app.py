@@ -146,7 +146,10 @@ def get_user_statistics(user_id):
         if analyses:
             last_analysis = max(analyses, key=lambda x: x.get('date', datetime.min))
             last_analysis_date = last_analysis.get('date', datetime.now())
-            last_analysis_days = (datetime.now() - last_analysis_date).days
+            print(last_analysis_date)
+            last_analysis_days = (datetime.now()-last_analysis_date).days
+            print('a',last_analysis_days)
+            print('b', datetime.now())
         
         return {
             'analysis_count': analysis_count,
