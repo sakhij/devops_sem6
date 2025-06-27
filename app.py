@@ -91,6 +91,18 @@ def load_user(user_id):
     return None
 
 
+def get_current_utc_time():
+    """Get current UTC time as timezone-aware datetime"""
+    return datetime.now(timezone.utc)
+
+
+def make_timezone_naive(dt):
+    """Convert timezone-aware datetime to naive UTC datetime"""
+    if dt.tzinfo is not None:
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
 # Profile Management Functions
 def get_user_profile(user_id):
     """Get extended user profile information"""
@@ -109,7 +121,7 @@ def get_user_profile(user_id):
                 "email_notifications": True,
                 "marketing_emails": False,
                 "timezone": "UTC",
-                "created_at": datetime.utcnow()
+                "created_at": get_current_utc_time()
             }
             DB.user_profiles.insert_one(default_profile)
             return default_profile
@@ -125,7 +137,7 @@ def update_user_profile(user_id, profile_data):
         return False
 
     try:
-        profile_data["updated_at"] = datetime.utcnow()
+        profile_data["updated_at"] = get_current_utc_time()
         result = DB.user_profiles.update_one(
             {"user_id": user_id},
             {"$set": profile_data},
@@ -135,6 +147,37 @@ def update_user_profile(user_id, profile_data):
     except Exception as e:
         print(f"Error updating user profile: {e}")
         return False
+
+
+def calculate_time_differences(user, now_utc):
+    """Calculate time differences for user statistics"""
+    # Calculate days since joining
+    created_at = user.get('created_at', now_utc)
+    created_at_naive = make_timezone_naive(created_at)
+    days_since_join = max(0, (now_utc - created_at_naive).days)
+    
+    return days_since_join, created_at_naive
+
+
+def calculate_analysis_stats(analyses, now_utc):
+    """Calculate analysis-related statistics"""
+    analysis_count = len(analyses)
+    avg_score = None
+    last_analysis_days = 0
+    
+    if analyses:
+        # Calculate average score
+        total_score = sum(analysis.get('score', 0) for analysis in analyses)
+        avg_score = round(total_score / analysis_count, 1)
+        
+        # Calculate days since last analysis
+        last_analysis = max(analyses, key=lambda x: x.get('date', datetime.min))
+        last_analysis_date = last_analysis.get('date', now_utc)
+        last_analysis_naive = make_timezone_naive(last_analysis_date)
+        time_diff = now_utc - last_analysis_naive
+        last_analysis_days = max(0, time_diff.days)
+    
+    return analysis_count, avg_score, last_analysis_days
 
 
 def get_user_statistics(user_id):
@@ -153,49 +196,23 @@ def get_user_statistics(user_id):
         user_timezone = (user_profile.get('timezone', 'UTC')
                          if user_profile else 'UTC')
 
-        # Get analysis count and average score
+        # Get analysis data
         analyses = list(DB.analyses.find({"user_id": user_id}))
-        analysis_count = len(analyses)
+        
+        # Get current UTC time (timezone-naive for consistency)
+        now_utc = make_timezone_naive(get_current_utc_time())
 
-        # Calculate average score
-        avg_score = None
-        if analyses:
-            total_score = sum(analysis.get('score', 0) for analysis in analyses)
-            avg_score = round(total_score / analysis_count, 1)
-
-        # Get current UTC time
-        now_utc = datetime.utcnow()
-
-        # Calculate days since joining
-        created_at = user.get('created_at', now_utc)
-        # Ensure created_at is timezone-naive
-        if hasattr(created_at, 'tzinfo') and created_at.tzinfo:
-            created_at = created_at.replace(tzinfo=None)
-        days_since_join = max(0, (now_utc - created_at).days)
-
-        # Calculate days since last analysis - FIXED VERSION
-        last_analysis_days = 0
-        if analyses:
-            last_analysis = max(analyses,
-                                key=lambda x: x.get('date', datetime.min))
-            last_analysis_date = last_analysis.get('date', now_utc)
-
-            # Ensure last_analysis_date is timezone-naive
-            if (hasattr(last_analysis_date, 'tzinfo') and
-                    last_analysis_date.tzinfo):
-                last_analysis_date = last_analysis_date.replace(tzinfo=None)
-
-            # Calculate difference and ensure it's not negative
-            time_diff = now_utc - last_analysis_date
-            last_analysis_days = max(0, time_diff.days)
+        # Calculate time differences
+        days_since_join, created_at_naive = calculate_time_differences(user, now_utc)
+        
+        # Calculate analysis statistics
+        analysis_count, avg_score, last_analysis_days = calculate_analysis_stats(analyses, now_utc)
 
         # Convert dates to user's timezone for display
-        created_at_user_tz = convert_utc_to_timezone(created_at, user_timezone)
+        created_at_user_tz = convert_utc_to_timezone(created_at_naive, user_timezone)
         last_login_utc = user.get('last_login', now_utc)
-        if hasattr(last_login_utc, 'tzinfo') and last_login_utc.tzinfo:
-            last_login_utc = last_login_utc.replace(tzinfo=None)
-        last_login_user_tz = convert_utc_to_timezone(last_login_utc,
-                                                     user_timezone)
+        last_login_naive = make_timezone_naive(last_login_utc)
+        last_login_user_tz = convert_utc_to_timezone(last_login_naive, user_timezone)
 
         return {
             'analysis_count': analysis_count,
@@ -341,7 +358,7 @@ def save_analysis(user_id, predicted_role, score, resume_text=None):
             "user_id": user_id,
             "predicted_role": predicted_role,
             "score": score,
-            "date": datetime.utcnow(),  # Use UTC consistently
+            "date": get_current_utc_time(),
             "resume_text": resume_text[:1000] if resume_text else None
         }
         result = DB.analyses.insert_one(analysis_data)
@@ -360,7 +377,10 @@ def get_user_analyses(user_id):
                         .sort("date", -1).limit(10))
         for analysis in analyses:
             analysis['_id'] = str(analysis['_id'])
-            analysis['date'] = analysis['date'].strftime('%Y-%m-%d')
+            analysis_date = analysis['date']
+            if hasattr(analysis_date, 'tzinfo') and analysis_date.tzinfo:
+                analysis_date = analysis_date.astimezone(timezone.utc).replace(tzinfo=None)
+            analysis['date'] = analysis_date.strftime('%Y-%m-%d')
         return analyses
     except Exception as e:
         print(f"Error fetching analyses: {e}")
@@ -455,19 +475,20 @@ def auth_callback():
             'https://www.googleapis.com/oauth2/v1/userinfo',
             headers=headers).json()
 
+        current_time = get_current_utc_time()
         user_data = {
             'google_id': user_info['id'],
             'email': user_info['email'],
             'name': user_info['name'],
             'picture': user_info.get('picture'),
-            'last_login': datetime.utcnow(),  # Use UTC consistently
-            'updated_at': datetime.utcnow()
+            'last_login': current_time,
+            'updated_at': current_time
         }
         if DB is not None:
             DB.users.update_one(
                 {'google_id': user_info['id']},
                 {'$set': user_data,
-                 '$setOnInsert': {'created_at': datetime.utcnow()}},
+                 '$setOnInsert': {'created_at': current_time}},
                 upsert=True
             )
 
@@ -526,6 +547,43 @@ def dashboard():
                            analyses=get_user_analyses(current_user.id))
 
 
+def handle_personal_info_update():
+    """Handle personal information form submission"""
+    profile_data = {
+        'phone': request.form.get('phone', ''),
+        'location': request.form.get('location', ''),
+        'profession': request.form.get('profession', '')
+    }
+
+    # Also update user name in main users collection
+    new_name = request.form.get('name')
+    if new_name and new_name != current_user.name:
+        if DB is not None:
+            DB.users.update_one(
+                {"google_id": current_user.id},
+                {"$set": {"name": new_name}}
+            )
+
+    if update_user_profile(current_user.id, profile_data):
+        flash('Personal information updated successfully!', 'success')
+    else:
+        flash('Error updating personal information.', 'danger')
+
+
+def handle_preferences_update():
+    """Handle preferences form submission"""
+    profile_data = {
+        'email_notifications': 'email_notifications' in request.form,
+        'marketing_emails': 'marketing_emails' in request.form,
+        'timezone': request.form.get('timezone', 'UTC')
+    }
+
+    if update_user_profile(current_user.id, profile_data):
+        flash('Preferences updated successfully!', 'success')
+    else:
+        flash('Error updating preferences.', 'danger')
+
+
 @app.route('/profile', methods=['GET', 'POST'])
 @login_required
 def profile():
@@ -534,38 +592,9 @@ def profile():
         form_type = request.form.get('form_type')
 
         if form_type == 'personal_info':
-            # Update personal information
-            profile_data = {
-                'phone': request.form.get('phone', ''),
-                'location': request.form.get('location', ''),
-                'profession': request.form.get('profession', '')
-            }
-
-            # Also update user name in main users collection
-            if request.form.get('name') != current_user.name:
-                if DB is not None:
-                    DB.users.update_one(
-                        {"google_id": current_user.id},
-                        {"$set": {"name": request.form.get('name')}}
-                    )
-
-            if update_user_profile(current_user.id, profile_data):
-                flash('Personal information updated successfully!', 'success')
-            else:
-                flash('Error updating personal information.', 'danger')
-
+            handle_personal_info_update()
         elif form_type == 'preferences':
-            # Update preferences
-            profile_data = {
-                'email_notifications': 'email_notifications' in request.form,
-                'marketing_emails': 'marketing_emails' in request.form,
-                'timezone': request.form.get('timezone', 'UTC')
-            }
-
-            if update_user_profile(current_user.id, profile_data):
-                flash('Preferences updated successfully!', 'success')
-            else:
-                flash('Error updating preferences.', 'danger')
+            handle_preferences_update()
 
         return redirect(url_for('profile'))
 
