@@ -6,9 +6,11 @@ from datetime import datetime, timezone
 from io import BytesIO
 from urllib.parse import urlencode
 import pytz
+import html
+import bleach
 
 import numpy as np
-import PyPDF2
+from pypdf import PdfReader
 import requests
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, redirect, url_for, flash, session
@@ -276,25 +278,60 @@ def calculate_resume_quality(resume_text):
 
 def extract_text_from_pdf(file_stream):
     """Extracts text content from a PDF file stream"""
-    reader = PyPDF2.PdfReader(file_stream)
-    return ''.join(page.extract_text() or '' for page in reader.pages)
+    try:
+        reader = PdfReader(file_stream)
+        text = ""
+        for page in reader.pages:
+            text += page.extract_text() or ""
+        return text
+    except Exception as e:
+        print(f"Error reading PDF: {e}")
+        return ""
+
+def sanitize_input(text):
+    """Sanitize user input to prevent XSS"""
+    if not text:
+        return ""
+    # Remove HTML tags and escape special characters
+    cleaned = bleach.clean(text, tags=[], strip=True)
+    return html.escape(cleaned)
 
 def extract_uploaded_resume_text(uploaded_file):
-    """Reads and extracts text from uploaded file"""
+    """Reads and extracts text from uploaded file with improved security"""
     if not uploaded_file:
         flash("No file uploaded. Please select a resume file.", 'warning')
         return None
 
-    filename = uploaded_file.filename.lower()
+    filename = uploaded_file.filename
+    if not filename:
+        flash("Invalid file name.", 'warning')
+        return None
+    
+    filename_lower = filename.lower()
+    
+    # Check file size (limit to 5MB)
+    MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
+    uploaded_file.seek(0, 2)  # Seek to end
+    file_size = uploaded_file.tell()
+    uploaded_file.seek(0)  # Reset to beginning
+    
+    if file_size > MAX_FILE_SIZE:
+        flash("File too large. Please upload a file smaller than 5MB.", 'warning')
+        return None
+    
     try:
-        if filename.endswith('.txt'):
-            return uploaded_file.read().decode('utf-8', errors='ignore')
-        if filename.endswith('.pdf'):
-            return extract_text_from_pdf(BytesIO(uploaded_file.read()))
-        flash("Unsupported file format. Please upload a .pdf or .txt file.", 'warning')
+        if filename_lower.endswith('.txt'):
+            content = uploaded_file.read().decode('utf-8', errors='ignore')
+            return sanitize_input(content)
+        elif filename_lower.endswith('.pdf'):
+            content = extract_text_from_pdf(BytesIO(uploaded_file.read()))
+            return sanitize_input(content)
+        else:
+            flash("Unsupported file format. Please upload a .pdf or .txt file.", 'warning')
+            return None
     except Exception as e:
-        flash(f"Error processing file: {e}", 'danger')
-    return None
+        flash(f"Error processing file: {str(e)}", 'danger')
+        return None
 
 def save_analysis(user_id, predicted_role, score, resume_text=None):
     """Saves analysis to MongoDB"""
