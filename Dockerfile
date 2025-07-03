@@ -1,53 +1,32 @@
-# Multi-stage build for smaller, more secure image
-FROM python:3.11-slim-bookworm AS builder
+# Use a more recent Python image with latest security updates
+FROM python:3.11-slim-bookworm
 
-# Install build dependencies
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    build-essential \
-    gcc \
-    && rm -rf /var/lib/apt/lists/*
-
-# Set working directory
-WORKDIR /app
-
-# Copy requirements and install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip setuptools>=78.1.1 && \
-    pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels -r requirements.txt
-
-# Production stage
-FROM python:3.11-slim-bookworm AS production
-
-# Create non-root user
+# Create non-root user for security
 RUN groupadd -r appuser && useradd -r -g appuser appuser
 
-# Update system and install minimal required packages
+# Update system packages and install security updates
 RUN apt-get update && \
     apt-get upgrade -y && \
     apt-get install -y --no-install-recommends \
-    ca-certificates \
-    curl && \
-    apt-get autoremove -y && \
+    ca-certificates && \
     apt-get clean && \
-    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
 
-# Copy wheels from builder stage and install
-COPY --from=builder /app/wheels /wheels
+# Copy requirements first for better caching
 COPY requirements.txt .
+
+# Upgrade pip and install dependencies with specific versions
 RUN pip install --no-cache-dir --upgrade pip setuptools>=78.1.1 && \
-    pip install --no-cache-dir --no-index --find-links /wheels -r requirements.txt && \
-    rm -rf /wheels
+    pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY --chown=appuser:appuser . .
+COPY . .
 
-# Create necessary directories with proper permissions
-RUN mkdir -p /app/models /app/templates /app/static && \
-    chown -R appuser:appuser /app
+# Change ownership to non-root user
+RUN chown -R appuser:appuser /app
 
 # Switch to non-root user
 USER appuser
@@ -55,14 +34,13 @@ USER appuser
 # Set environment variables
 ENV FLASK_ENV=production
 ENV PYTHONUNBUFFERED=1
-ENV PATH="/home/appuser/.local/bin:$PATH"
 
-# Expose port
+# Use specific port
 EXPOSE 5000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:5000/health || exit 1
+    CMD curl -f http://localhost:5000/ || exit 1
 
-# Run the application
+# Run the app
 CMD ["python", "app.py"]
