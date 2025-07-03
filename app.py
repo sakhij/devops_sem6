@@ -593,8 +593,7 @@ def handle_personal_info_update():
 
     # Also update user name in main users collection
     new_name = request.form.get('name')
-    if new_name and new_name != current_user.name:
-        if DB is not None:
+    if new_name and new_name != current_user.name and DB is not None:
             DB.users.update_one(
                 {"google_id": current_user.id},
                 {"$set": {"name": new_name}}

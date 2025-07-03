@@ -1,11 +1,9 @@
 # Use a more recent Python image with latest security updates
 FROM python:3.11-slim-bookworm
 
-# Create non-root user for security
-RUN groupadd -r appuser && useradd -r -g appuser appuser
-
-# Update system packages and install security updates
-RUN apt-get update && \
+# Create non-root user and update system packages
+RUN groupadd -r appuser && useradd -r -g appuser appuser && \
+    apt-get update && \
     apt-get upgrade -y && \
     apt-get install -y --no-install-recommends \
     ca-certificates && \
