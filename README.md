@@ -118,5 +118,5 @@ trivy image flaskapp-ci-cd
 
 ## 📸 Sample Screenshot
 
-*(Attach a screenshot of your Jenkins pipeline, SonarQube dashboard, or deployed app here)*
+<img width="1916" height="973" alt="image" src="https://github.com/user-attachments/assets/d9183d10-4b8d-481c-8b9e-f9c3ebca3070" />
 
