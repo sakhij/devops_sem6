@@ -117,6 +117,11 @@ trivy image flaskapp-ci-cd
 ---
 
 ## 📸 Sample Screenshot
+![WhatsApp Image 2025-07-17 at 18 49 11_c1b147a6](https://github.com/user-attachments/assets/d60f22db-6730-49a9-a392-1d961ba0c60e)
+
+![WhatsApp Image 2025-07-17 at 18 48 29_5b5d5827](https://github.com/user-attachments/assets/eb92031c-93b1-4205-9dbb-12dc4d2f8432)
 
 <img width="1916" height="973" alt="image" src="https://github.com/user-attachments/assets/d9183d10-4b8d-481c-8b9e-f9c3ebca3070" />
+<img width="1895" height="861" alt="image" src="https://github.com/user-attachments/assets/566d371c-a893-476e-b8a3-0d6daff8ed25" />
+
 
