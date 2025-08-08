@@ -3,35 +3,221 @@
 {% block title %}User Dashboard{% endblock %}
 
 {% block content %}
-    <h1>Your Dashboard</h1>
-    {% if current_user.is_authenticated %}
-        <p>Welcome, {{ session.email or 'User' }}!</p>
-        <h2>Your Past Analyses (Example Data)</h2>
-        {% if analyses %}
-            <table>
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Date</th>
-                        <th>Predicted Role</th>
-                        <th>Score</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for analysis in analyses %}
-                        <tr>
-                            <td>{{ analysis.id }}</td>
-                            <td>{{ analysis.date }}</td>
-                            <td>{{ analysis.role }}</td>
-                            <td>{{ analysis.score }}</td>
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+    <div class="dashboard-container">
+        <h1>Your Dashboard</h1>
+        {% if current_user.is_authenticated %}
+            <div class="welcome-section">
+                <p class="welcome-message">Welcome back, <strong>{{ current_user.name }}</strong>!</p>
+            </div>
+            
+            <div class="analyses-section">
+                <h2>Your Past Analyses</h2>
+                {% if analyses %}
+                    <div class="table-container">
+                        <table class="analyses-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Predicted Role</th>
+                                    <th>Score</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for analysis in analyses %}
+                                    <tr>
+                                        <td>{{ analysis.date }}</td>
+                                        <td>{{ analysis.predicted_role }}</td>
+                                        <td>
+                                            <span class="score-badge score-{{ 'excellent' if analysis.score >= 80 else 'good' if analysis.score >= 60 else 'fair' if analysis.score >= 40 else 'poor' }}">
+                                                {{ analysis.score }}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="no-analyses">
+                        <div class="no-analyses-content">
+                            <h3>No analyses yet</h3>
+                            <p>Upload your first resume to get started with AI-powered analysis!</p>
+                            <a href="{{ url_for('index') }}" class="btn-upload">Upload Resume</a>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
         {% else %}
-            <p>No past analyses found. Upload a resume to get started!</p>
+            <p>Please log in to view your dashboard.</p>
         {% endif %}
-    {% else %}
-        <p>Please <a href="{{ url_for('login') }}">log in with Google</a> to view your dashboard.</p>
-    {% endif %}
+    </div>
+
+    <style>
+        .dashboard-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .dashboard-container h1 {
+            color: #1f2937;
+            font-size: 2rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        .welcome-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .welcome-message {
+            font-size: 1.1rem;
+            margin: 0;
+        }
+
+        .analyses-section {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e5e7eb;
+        }
+
+        .analyses-section h2 {
+            color: #374151;
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 0.5rem;
+        }
+
+        .table-container {
+            overflow-x: auto;
+        }
+
+        .analyses-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+
+        .analyses-table th {
+            background: #f9fafb;
+            color: #374151;
+            font-weight: 600;
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 2px solid #e5e7eb;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .analyses-table td {
+            padding: 1rem;
+            border-bottom: 1px solid #e5e7eb;
+            color: #6b7280;
+        }
+
+        .analyses-table tr:hover {
+            background: #f9fafb;
+        }
+
+        .score-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            text-align: center;
+            min-width: 50px;
+        }
+
+        .score-excellent {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .score-good {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .score-fair {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .score-poor {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .no-analyses {
+            text-align: center;
+            padding: 3rem 1rem;
+        }
+
+        .no-analyses-content h3 {
+            color: #6b7280;
+            font-size: 1.25rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .no-analyses-content p {
+            color: #9ca3af;
+            margin-bottom: 1.5rem;
+        }
+
+        .btn-upload {
+            display: inline-block;
+            background: #4f46e5;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 500;
+            transition: background-color 0.2s ease;
+        }
+
+        .btn-upload:hover {
+            background: #4338ca;
+            text-decoration: none;
+            color: white;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .dashboard-container {
+                padding: 15px;
+            }
+
+            .dashboard-container h1 {
+                font-size: 1.5rem;
+            }
+
+            .welcome-section {
+                padding: 1rem;
+            }
+
+            .analyses-section {
+                padding: 1rem;
+            }
+
+            .analyses-table {
+                font-size: 0.9rem;
+            }
+
+            .analyses-table th,
+            .analyses-table td {
+                padding: 0.75rem 0.5rem;
+            }
+        }
+    </style>
 {% endblock %}

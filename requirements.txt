@@ -1,8 +1,35 @@
-Flask
-Flask-Login
-Flask-Dance
-Authlib
-requests
-PyPDF2
-numpy
-scikit-learn
+# Core Flask dependencies
+Flask==3.0.3
+Flask-Login==0.6.3
+Werkzeug==3.0.4
+
+# Database
+pymongo==4.8.0
+
+# Data processing and ML
+numpy==2.1.0
+pandas==2.2.2
+scikit-learn==1.5.1
+scipy==1.13.1
+joblib==1.4.2
+
+# PDF processing (updated from PyPDF2 to pypdf for security)
+pypdf==4.3.1
+
+# HTTP requests
+requests==2.32.3
+urllib3==2.2.2
+
+# Environment and configuration
+python-dotenv==1.0.1
+
+# Timezone handling
+pytz==2024.1
+
+# Security: Force minimum setuptools version to fix vulnerabilities
+setuptools>=78.1.1
+bleach==6.0.0
+
+# Additional security packages
+cryptography>=42.0.0
+certifi>=2024.7.4
