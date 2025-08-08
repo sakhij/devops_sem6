@@ -7,4 +7,8 @@
     <p>This is an AI-powered resume analysis tool designed to help you improve your resume.</p>
     <p>It provides insights into resume quality and suggests potential job roles based on the content.</p>
     <p>Our goal is to assist job seekers in creating more effective resumes for their career aspirations.</p>
+
+    {% if not current_user.is_authenticated %}
+        <p><a href="{{ url_for('login') }}">Log in with Google</a> to get started!</p>
+    {% endif %}
 {% endblock %}

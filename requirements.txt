@@ -1,4 +1,8 @@
-flask
-numpy
+Flask
+Flask-Login
+Flask-Dance
+Authlib
+requests
 PyPDF2
+numpy
 scikit-learn

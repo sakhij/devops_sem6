@@ -5,7 +5,7 @@
 {% block content %}
     <h1>Your Dashboard</h1>
     {% if current_user.is_authenticated %}
-        <p>Welcome back, User {{ current_user.id }}!</p>
+        <p>Welcome, {{ session.email or 'User' }}!</p>
         <h2>Your Past Analyses (Example Data)</h2>
         {% if analyses %}
             <table>
@@ -32,6 +32,6 @@
             <p>No past analyses found. Upload a resume to get started!</p>
         {% endif %}
     {% else %}
-        <p>Please log in to view your dashboard.</p>
+        <p>Please <a href="{{ url_for('login') }}">log in with Google</a> to view your dashboard.</p>
     {% endif %}
 {% endblock %}
